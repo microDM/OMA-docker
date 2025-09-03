@@ -26,7 +26,7 @@ jobs:
       - name: Build SIF (fakeroot)
         run: |
           apptainer --version
-          apptainer build --fakeroot "${SIF_NAME}" apptainer.def
+          apptainer build --fakeroot "${SIF_NAME}" microbiome_oma_rstudio.def
 
       - name: Create GitHub Release (auto notes)
         uses: softprops/action-gh-release@v2
