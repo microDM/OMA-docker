@@ -1,0 +1,115 @@
+Bootstrap: docker
+From: ghcr.io/microbiome/oma:devel
+
+%post
+    echo "Updating and installing dependencies..."
+    apt-get update && apt-get install -y \
+        wget \
+        gdebi-core \
+        libxslt-dev \
+        libnss3 \
+        libxkbcommon-x11-0 \
+        mesa-utils \
+        dbus-x11 \
+        xvfb
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libxml2-dev
+
+     # --- Java for rJava ---
+    apt-get install -y --no-install-recommends openjdk-17-jdk-headless
+
+    # Make JAVA_HOME available system-wide
+    JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(which javac)")")")
+    echo "export JAVA_HOME=$JAVA_HOME" > /etc/profile.d/java_home.sh
+    echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> /etc/profile.d/java_home.sh
+    chmod +x /etc/profile.d/java_home.sh
+
+    # Configure R to see Java
+    /bin/bash -lc "source /etc/profile.d/java_home.sh && R CMD javareconf"
+
+    echo "Downloading RStudio Desktop..."
+    wget https://download1.rstudio.org/electron/jammy/amd64/rstudio-2025.05.0-496-amd64.deb
+    
+    echo "Installing RStudio Desktop..."
+    gdebi -n rstudio-2025.05.0-496-amd64.deb
+    
+    echo "Cleaning up..."
+    rm rstudio-2025.05.0-496-amd64.deb
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    # Set up D-Bus and X11
+    mkdir -p /var/run/dbus
+    dbus-uuidgen > /var/run/dbus/machine-id
+    
+    echo "RStudio Desktop setup complete!"
+
+    # Install remotes (once)
+    R -e "install.packages('remotes', repos='https://cloud.r-project.org')"
+    # Install pak (binary when available)
+    R -e "install.packages('pak', repos='https://r-lib.github.io/p/pak/stable')"
+
+    echo "Installing R and Bioconductor packages..."
+    # Install BiocManager from a stable CRAN mirror
+    R -e "if (!requireNamespace('BiocManager', quietly = TRUE)) \
+            install.packages('BiocManager', repos='https://cloud.r-project.org')"
+
+    # Use Bioconductor’s standard repositories (adds BioC + CRAN)
+    R -e "options(repos = BiocManager::repositories())"
+
+    # Change BioC version only if different; must use ask=FALSE in non-interactive builds
+    R -e "if (as.character(BiocManager::version()) != '3.21') \
+            BiocManager::install(version='3.21', ask=FALSE)"
+
+    # Ensure repos are correct again (defensive), then install BioC packages without prompts
+    R -e "options(repos = BiocManager::repositories()); \
+      BiocManager::install(c('DESeq2','edgeR','limma','GenomicRanges','Biostrings', 'Rgraphviz'), \
+                           ask=FALSE, update=FALSE)"
+
+    R -e "install.packages('INLA',repos=c(getOption('repos'),INLA='https://inla.r-inla-download.org/R/stable'), dep=TRUE)"
+    
+    # --- CRAN package list (tidy) ---
+    CRAN_PKGS="c(
+      'coda4microbiome','survIDINRI','tidymodels',
+      'mlr3','mlr3verse','mlr3learners','mlr3pipelines',
+      'gtsummary','broom.helpers','randomForestSRC','smoothHR','ggsurvfit',
+      'BART','bartMachine','bartMachineJARs',
+      'splitTools','rsample'
+    )"
+    R -e "cran_pkgs <- ${CRAN_PKGS}; install.packages(cran_pkgs, repos='https://cloud.r-project.org', dependencies=TRUE)"
+
+    # ---------- Github packages ------------ #
+    R -e "pak::pkg_install('mlr-org/mlr3extralearners@v1.1.0')"
+    R -e "pak::pkg_install('mlr-org/mlr3proba@v0.8.1')"
+    R -e "pak::pkg_install('xoopR/distr6@v1.8.4')"
+
+    echo "RStudio Desktop and all packages are installed successfully!"
+
+%environment
+    export DISPLAY=:0
+    export USER=root
+
+%runscript
+    echo "Starting RStudio Desktop..."
+    rstudio --no-sandbox --disable-gpu &
+
+%startscript
+    echo "Starting X11 and DBus services..."
+    /etc/init.d/dbus start
+    exec /bin/bash
+
+%labels
+    Maintainer "Dattatray Mongad <dattatray.mongad@utu.fi>"
+    Version "1.0"
+    Description "RStudio Desktop with all dependencies from microbiome/oma:devel"
+
+%help
+    This Singularity image contains:
+    - RStudio Desktop
+    - All packages from ghcr.io/microbiome/oma:devel
+    - X11 forwarding support
+    - DBus setup

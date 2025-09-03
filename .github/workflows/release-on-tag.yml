@@ -1,0 +1,54 @@
+name: Build SIF and Publish Release (on tags)
+
+on:
+  push:
+    tags:
+      - "v*.*"    # v1.0, v1.0.1, etc.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}                       # e.g. v1.0
+      SIF_NAME: Rstudio_OMA-${{ github.ref_name }}.sif  # Rstudio_OMA-v1.0.sif
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Apptainer
+        uses: eWaterCycle/setup-apptainer@v2
+        with:
+          apptainer-version: "1.3.4"
+
+      - name: Build SIF (fakeroot)
+        run: |
+          apptainer --version
+          apptainer build --fakeroot "${SIF_NAME}" apptainer.def
+
+      - name: Create GitHub Release (auto notes)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload SIF asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SIF_NAME }}
+          path: ${{ env.SIF_NAME }}
+          if-no-files-found: error
+
+      - name: Attach to Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.SIF_NAME }}
+          asset_name: ${{ env.SIF_NAME }}
+          tag: ${{ env.TAG }}
+          overwrite: true
