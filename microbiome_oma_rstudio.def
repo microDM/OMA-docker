@@ -49,14 +49,14 @@ From: ghcr.io/microbiome/oma:devel
     echo "RStudio Desktop setup complete!"
 
     # Install remotes (once)
-    R -e "install.packages('remotes', repos='https://cloud.r-project.org')"
+    R -e "install.packages('remotes', repos='https://cloud.r-project.org', quite = T)"
     # Install pak (binary when available)
-    R -e "install.packages('pak', repos='https://r-lib.github.io/p/pak/stable')"
+    R -e "install.packages('pak', repos='https://r-lib.github.io/p/pak/stable', quite = T)"
 
     echo "Installing R and Bioconductor packages..."
     # Install BiocManager from a stable CRAN mirror
     R -e "if (!requireNamespace('BiocManager', quietly = TRUE)) \
-            install.packages('BiocManager', repos='https://cloud.r-project.org')"
+            install.packages('BiocManager', repos='https://cloud.r-project.org', quite = T)"
 
     # Use Bioconductor’s standard repositories (adds BioC + CRAN)
     R -e "options(repos = BiocManager::repositories())"
@@ -70,7 +70,7 @@ From: ghcr.io/microbiome/oma:devel
       BiocManager::install(c('DESeq2','edgeR','limma','GenomicRanges','Biostrings', 'Rgraphviz'), \
                            ask=FALSE, update=FALSE)"
 
-    R -e "install.packages('INLA',repos=c(getOption('repos'),INLA='https://inla.r-inla-download.org/R/stable'), dep=TRUE)"
+    R -e "install.packages('INLA',repos=c(getOption('repos'),INLA='https://inla.r-inla-download.org/R/stable'), dep=TRUE, quite = T)"
     
     # --- CRAN package list (tidy) ---
     CRAN_PKGS="c(
@@ -80,12 +80,20 @@ From: ghcr.io/microbiome/oma:devel
       'BART','bartMachine','bartMachineJARs',
       'splitTools','rsample'
     )"
-    R -e "cran_pkgs <- ${CRAN_PKGS}; install.packages(cran_pkgs, repos='https://cloud.r-project.org', dependencies=TRUE)"
+    R -e "cran_pkgs <- ${CRAN_PKGS}; install.packages(cran_pkgs, repos='https://cloud.r-project.org', dependencies=TRUE, quite = T)"
 
     # ---------- Github packages ------------ #
-    R -e "pak::pkg_install('mlr-org/mlr3extralearners@v1.1.0')"
-    R -e "pak::pkg_install('mlr-org/mlr3proba@v0.8.1')"
-    R -e "pak::pkg_install('xoopR/distr6@v1.8.4')"
+    echo "Installing GitHub packages via pak..."
+    R -e "suppressMessages(
+      pak::pkg_install(
+        c(
+          'mlr-org/mlr3extralearners@v1.1.0',
+          'mlr-org/mlr3proba@v0.8.1',
+          'xoopR/distr6@v1.8.4'
+        ),
+        ask = FALSE
+      )
+    ); cat('GitHub packages installed successfully\n')"
 
     echo "RStudio Desktop and all packages are installed successfully!"
 
